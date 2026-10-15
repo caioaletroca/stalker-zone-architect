@@ -1,4 +1,4 @@
-local version = "0.3.0"
+local version = "0.3.1"
 
 local function log(fmt, ...)
     if bb_debug then bb_debug.log("core", fmt, ...) end
@@ -38,5 +38,4 @@ function on_game_start()
     RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
 
     bb_hf_compat.install()
-    bb_physics.install()
 end

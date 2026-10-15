@@ -40,7 +40,9 @@ visual                                  = base_building\bb_foundation.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
-script_binding                          = bind_hf_base.init
+; HF's binder plus a spawn step that drops the engine's quantised physics
+; snapshot (bb_binder / bb_physics)
+script_binding                          = bb_binder.init
 item_section                            = bb_item_foundation
 
 ; Anchor the root bone to the world so the physics engine never moves a
@@ -85,7 +87,9 @@ visual                                  = base_building\bb_wall.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
-script_binding                          = bind_hf_base.init
+; HF's binder plus a spawn step that drops the engine's quantised physics
+; snapshot (bb_binder / bb_physics)
+script_binding                          = bb_binder.init
 item_section                            = bb_item_wall
 
 ; Anchor the root bone to the world so the physics engine never moves a
@@ -130,7 +134,9 @@ visual                                  = base_building\bb_wall_doorway.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
-script_binding                          = bind_hf_base.init
+; HF's binder plus a spawn step that drops the engine's quantised physics
+; snapshot (bb_binder / bb_physics)
+script_binding                          = bb_binder.init
 item_section                            = bb_item_wall_doorway
 
 ; Anchor the root bone to the world so the physics engine never moves a
@@ -175,7 +181,9 @@ visual                                  = base_building\bb_roof_flat.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
-script_binding                          = bind_hf_base.init
+; HF's binder plus a spawn step that drops the engine's quantised physics
+; snapshot (bb_binder / bb_physics)
+script_binding                          = bb_binder.init
 item_section                            = bb_item_roof_flat
 
 ; Anchor the root bone to the world so the physics engine never moves a

@@ -59,7 +59,9 @@ visual                                  = base_building{bs}bb_{key}.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
-script_binding                          = bind_hf_base.init
+; HF's binder plus a spawn step that drops the engine's quantised physics
+; snapshot (bb_binder / bb_physics)
+script_binding                          = bb_binder.init
 item_section                            = bb_item_{key}
 
 ; Anchor the root bone to the world so the physics engine never moves a

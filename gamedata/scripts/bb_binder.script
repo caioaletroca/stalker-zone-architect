@@ -1,0 +1,30 @@
+-- Script binder for building pieces: HF's binder plus one extra step on spawn.
+--
+-- CGameObject::net_Spawn calls the script binder's net_spawn(se) with the
+-- spawn entity, and only afterwards does CPhysicObject::net_Spawn run
+-- CPHSkeleton::Spawn -> RestoreNetState on that same entity. So net_spawn is
+-- the last point where the engine's quantised physics snapshot can be
+-- dropped before it is applied (see bb_physics).
+--
+-- Sections use: script_binding = bb_binder.init
+
+class "bb_base_binder" (bind_hf_base.base_binder)
+
+function bb_base_binder:__init(obj) super(obj)
+end
+
+function bb_base_binder:net_spawn(se_abstract)
+    bb_physics.on_piece_net_spawn(self.object, se_abstract)
+    return bind_hf_base.base_binder.net_spawn(self, se_abstract)
+end
+
+function init(obj)
+    -- HF's wrapper binds its own base_binder in its constructor (and HF's
+    -- own init binds again); rebinding with our subclass follows the same
+    -- pattern and keeps every HF feature that goes through the wrapper.
+    local wrapper = bind_hf_base.hf_binder_wrapper(obj)
+    local binder = bb_base_binder(obj)
+    binder.wrapper = wrapper
+    wrapper.binder = binder
+    obj:bind_object(binder)
+end
