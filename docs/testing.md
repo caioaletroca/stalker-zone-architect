@@ -9,9 +9,15 @@
 
 Log file: `C:\Anomaly\appdata\logs\xray_<user>.log`. Every line from this mod starts with `base_building[`.
 
+## Crafting pieces
+
+1. Open a workshop with a basic toolkit and go to the **Furniture** tab.
+2. [ ] Foundation, Wall, Doorway Wall and Flat Roof (Prototype) are listed with their part costs (wood, scrap, fasteners).
+3. [ ] Crafting one consumes the parts and puts the item in your inventory, ready to place.
+
 ## Spawning pieces
 
-Open the debug menu, go to the item spawner, search for `bb_item`, and spawn several of each:
+For quicker testing, open the debug menu, go to the item spawner, search for `bb_item`, and spawn several of each:
 
 | Item section | Piece | Colour |
 |---|---|---|

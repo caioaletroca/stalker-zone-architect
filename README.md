@@ -13,9 +13,11 @@ Modular, snapping base building (foundations, walls, doorways, flat roofs) for S
 | `assets/blender/bb_greybox.blend` | Blender source scene (generated) |
 | `tools/blender/build_greybox.py` | Builds the .blend and exports the OGFs |
 | `tools/make_dds.py` | Writes the solid-colour DDS textures |
-| `tools/gen_piece_configs.py` | Generates the piece .ltx sections and string table |
+| `tools/gen_piece_configs.py` | Generates the piece .ltx sections, recipes and string table |
 | `tools/sim_snap.py` | Offline check of the snap/rotation maths |
 | `tools/ogf_info.py` | Dumps OGF chunk headers |
+| `gamedata/configs/items/settings/mod_craft_bb_pieces.ltx` | Workshop recipes for GAMMA (Furniture tab, generated) |
+| `optional/vanilla-anomaly-crafting/` | Use instead of the GAMMA recipes on vanilla Anomaly (Equipment tab) |
 | `references/` | Original HF / EMHF mods (git-ignored, reading only) |
 
 ## Scripts
@@ -40,6 +42,21 @@ python tools/make_dds.py
 ```
 
 Each piece is exported as a rigid skeleton (one armature with a box-shaped collision bone per part), because HF spawns placeables as `physic_object`. Artists replacing a greybox should keep the same origin (bottom centre), the same dimensions, and an armature with collision shapes.
+
+## Crafting
+
+Pieces are crafted at a workshop first and then placed, like all Hideout Furniture items. Costs live in the `RECIPES` table in `tools/gen_piece_configs.py`. Run it to regenerate both recipe files.
+
+| Piece | Tools | Parts |
+|---|---|---|
+| Foundation | basic | 8 wood, 4 scrap, 4 fasteners |
+| Wall | basic | 8 wood, 3 fasteners |
+| Doorway wall | basic | 7 wood, 3 fasteners |
+| Flat roof | basic | 6 wood, 2 scrap, 3 fasteners |
+
+GAMMA lists them in the workshop's **Furniture** tab. On vanilla Anomaly (no Furniture tab), delete `gamedata/configs/items/settings/mod_craft_bb_pieces.ltx` and copy in `optional/vanilla-anomaly-crafting/gamedata` instead; the pieces then appear in the **Equipment** tab. Don't install both, or the pieces show up in two tabs.
+
+Tilesets add their own recipes the same way: a `mod_craft_*.ltx` file that appends (`![8]`) lines for their own item sections.
 
 ## License
 
