@@ -180,3 +180,75 @@ if __name__ == "__main__":
     results = [run(a) for a in (V(0, 0, 0), V(0, math.radians(30), 0), V(0.1, 0.7, -0.05), V(0, math.pi, 0))]
     results += [run_upright(a) for a in (V(0.08, 0.7, -0.05), V(-0.1, -2.5, 0.12), V(0.05, math.pi, 0.0), V(0, 0, 0))]
     print("\nALL PASS" if all(results) else "\nSOME FAILED")
+
+
+# ---------------------------------------------------------------------------
+# Engine-convention maths (v0.3): what bb_piece/bb_socket now use.
+# Source: xray-monolith src/xrCore/_matrix.h (setHPB) and
+# src/xrGame/GameObject.cpp (XFORM().setXYZ(o_Angle) == setHPB(y, x, z)).
+# ---------------------------------------------------------------------------
+
+def engine_setXYZ(a):
+    """Rows i, j, k of the engine matrix for euler angle vector a."""
+    h, p, b = a.y, a.x, a.z
+    sh, ch, sp, cp, sb, cb = math.sin(h), math.cos(h), math.sin(p), math.cos(p), math.sin(b), math.cos(b)
+    cc, cs, sc, ss = ch * cb, ch * sb, sh * cb, sh * sb
+    i = V(cc - sp * ss, -cp * sb, sp * cs + sc)
+    j = V(sp * sc + cs, cp * cb, ss - sp * cc)
+    k = V(-cp * sh, sp, cp * ch)
+    return i, j, k
+
+
+def engine_transform(a, v):
+    i, j, k = engine_setXYZ(a)
+    return i * v.x + j * v.y + k * v.z
+
+
+def heading_from_angle(a):
+    """Port of bb_piece.heading_from_angle."""
+    p, h = a.x, a.y
+    kx, kz = -math.cos(p) * math.sin(h), math.cos(p) * math.cos(h)
+    return math.atan2(-kx, kz)
+
+
+def rotate_yaw(v, h):
+    """Port of bb_piece.rotate_yaw (engine setXYZ(0, h, 0) applied to v)."""
+    c, s = math.cos(h), math.sin(h)
+    return V(v.x * c - v.z * s, v.y, v.x * s + v.z * c)
+
+
+def run_engine():
+    print("\nengine-convention checks")
+    ok = True
+    for deg in (0, 1.17, 33.37, -33.37, 90, 178.83, -178.83, 180):
+        h = math.radians(deg)
+        a = V(0, h, 0)
+        for t in (V(2.5, 0.2, 0), V(0, 3.0, 1.25), V(-1.25, 0.2, 2.5)):
+            ok &= check("rotate_yaw == engine %.2f deg %r" % (deg, t), (rotate_yaw(t, h) - engine_transform(a, t)).len() < 1e-9)
+        ok &= check("heading_from_angle(0,%.2f,0)" % deg, abs(math.remainder(heading_from_angle(a) - h, 2 * math.pi)) < 1e-9)
+        # preview box: aol quaternion built from the same euler must draw like the engine
+        q = Q.from_euler(a)
+        for t in (V(1, 0, 0), V(0, 0, 1)):
+            ok &= check("aol preview matches engine %.2f deg" % deg, (q.rotate(t) - engine_transform(a, t)).len() < 1e-6)
+        # HF's create path: aol to_euler of that quaternion keeps the heading
+        e = q.to_euler()
+        ok &= check("aol to_euler keeps heading %.2f deg" % deg,
+                    abs(e.x) < 1e-9 and abs(e.z) < 1e-9 and abs(math.remainder(e.y - h, 2 * math.pi)) < 1e-9)
+    # tilted legacy angles: heading equals the projected engine forward
+    for a in (V(0.08, 0.7, -0.05), V(-0.1, 3.1, 0.12)):
+        _, _, k = engine_setXYZ(a)
+        hh = heading_from_angle(a)
+        ok &= check("tilted heading follows engine forward", abs(math.atan2(-k.x, k.z) - hh) < 1e-9)
+    # structure slots in engine convention: shared edge + wall continuation
+    for deg in (178.83, -33.37, 1.17):
+        h = math.radians(deg)
+        f = V(-206.264, -20.259, -147.096)
+        east_f = f + rotate_yaw(V(2.5, 0, 0), h)
+        w1 = f + rotate_yaw(V(1.25, 0.2, 0), h)
+        w2 = east_f + rotate_yaw(V(-1.25, 0.2, 0), h)
+        ok &= check("shared edge slot identical at %.2f deg" % deg, (w1 - w2).len() < 1e-9)
+    return ok
+
+
+if __name__ == "__main__":
+    print("\nENGINE ALL PASS" if run_engine() else "\nENGINE SOME FAILED")

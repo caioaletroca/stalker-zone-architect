@@ -22,9 +22,11 @@ Modular, snapping base building (foundations, walls, doorways, flat roofs) for S
 
 - `bb_core`: registers the `building_piece` HF type and the callbacks, and rebuilds the registry on load
 - `bb_hf_compat`: **every** HF hook lives here (start_placing_item, bbox SetWorldOrigin/CheckForCollisions, create_object). The mod no longer overrides any HF file.
+- `bb_physics`: drops the engine's quantised physics snapshot before a piece spawns, so pieces don't twist on reload
 - `bb_registry`: placed pieces by id and by structure
 - `bb_piece`: reads `bb_*` config keys and stores data in HF's per-object storage
 - `bb_socket`: module dimensions and socket/slot layouts
+- `bb_piece`: also holds the engine-convention heading maths (`setXYZ`/`setHPB`); pieces are always level
 - `bb_snap`: nearest free compatible slot, occupancy, snapped transform
 - `bb_debug`: logging (`base_building[...]` in the game log)
 

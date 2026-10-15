@@ -76,30 +76,49 @@ function set_data(obj_id, bb_data)
     log("Saved bb data for obj_id=%s structure=%s", tostring(obj_id), tostring(bb_data.structure_id))
 end
 
-local UP = vector():set(0, 1, 0)
-local FORWARD = vector():set(0, 0, 1)
+-- Rotation maths follow the engine exactly, not aol_rotation:
+--   GameObject::net_Spawn does XFORM().setXYZ(o_Angle) == setHPB(y, x, z)
+--   (xray-monolith src/xrGame/GameObject.cpp, src/xrCore/_matrix.h).
+-- Building pieces are always level, so a piece's orientation is just a
+-- heading h saved as euler (0, h, 0). Checked in tools/sim_snap.py.
 
----Keeps only the heading of a rotation, so the piece stands level.
----Structures never tilt with terrain: a yaw-only rotation saves as euler
----(0, h, 0), which the engine and aol_rotation interpret identically,
----while pitch/bank round trips are not guaranteed to match the engine.
----Ported and checked in tools/sim_snap.py (upright).
----@param q aol_rotation.Quaternion|nil
----@return aol_rotation.Quaternion
-function upright_rotation(q)
-    if not q then return aol_rotation.Quaternion() end
+---Wraps an angle into (-pi, pi].
+---@param a number radians
+---@return number
+function wrap_angle(a)
+    a = math.fmod(a + math.pi, 2 * math.pi)
+    if a < 0 then a = a + 2 * math.pi end
+    return a - math.pi
+end
 
-    local fwd = q:rotate_vector(FORWARD)
-    fwd.y = 0
-    if fwd:magnitude() < 0.0001 then return aol_rotation.Quaternion() end
-    fwd:normalize()
+---Heading of an engine euler angle vector: the direction the object's
+---forward axis points once projected onto the ground. For level angles
+---(0, h, 0) this is h; tilted angles saved by older versions get levelled.
+---@param angle vector euler angles as stored on server objects
+---@return number heading radians
+function heading_from_angle(angle)
+    -- engine forward axis: k = (-cos(p) sin(h), sin(p), cos(p) cos(h))
+    local cp = math.cos(angle.x)
+    local kx = -cp * math.sin(angle.y)
+    local kz = cp * math.cos(angle.y)
+    return math.atan2(-kx, kz)
+end
 
-    local heading = math.atan2(fwd.x, fwd.z)
-    local q_up = aol_rotation.get_rotation_around(UP, heading)
-    if q_up:rotate_vector(FORWARD):dotproduct(fwd) < 0.999 then
-        q_up = aol_rotation.get_rotation_around(UP, -heading)
-    end
-    return q_up
+---Rotates a local offset by a heading, exactly as the engine places a
+---level object: dest = v.x * i + v.y * j + v.z * k for setXYZ(0, h, 0).
+---@param v vector local offset
+---@param heading number radians
+---@return vector world offset
+function rotate_yaw(v, heading)
+    local c, s = math.cos(heading), math.sin(heading)
+    return vector():set(v.x * c - v.z * s, v.y, v.x * s + v.z * c)
+end
+
+---Euler angle vector (as stored on server objects) for a level heading.
+---@param heading number radians
+---@return vector
+function angle_from_heading(heading)
+    return vector():set(0, wrap_angle(heading), 0)
 end
 
 ---Adds the placement transform to a bb data table as plain numbers
@@ -155,8 +174,7 @@ function build(obj_id)
         size           = definition.size,
         position       = position,
         angle          = angle,
-        -- Level even for pieces saved tilted by older versions
-        rotation       = upright_rotation(aol_rotation.Quaternion(angle)),
+        heading        = heading_from_angle(angle),
         level_id       = get_level_id(obj),
         structure_id   = bb_data.structure_id,
         attached_to    = bb_data.attached_to,

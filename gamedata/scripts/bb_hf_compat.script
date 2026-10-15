@@ -6,12 +6,13 @@
 --
 --   placeable_furniture.start_placing_item(section)  -> remember held section
 --   bbox.rotation = q                                 (HF candidate rotation)
---   bbox:SetWorldOrigin(pos)                          -> snap / level pos + rotation
+--   bbox:SetWorldOrigin(pos)                          -> snap / level pos + heading
 --   bbox:UpdateBBox()
 --   bbox:CheckForCollisions()                         -> skipped for building pieces
 --   ...on confirm...
 --   placeable_furniture.create_object(section, place_coordinates, bbox.rotation)
---                                                     -> reuse preview snap
+--                                                     -> reuse preview snap, pass exact
+--                                                        euler (0, heading, 0)
 --
 -- HF internals relied on (HF 2.3.2):
 --   placeable_furniture.start_placing_item, create_object, in_placing_state
@@ -74,9 +75,13 @@ local function hook_preview()
 
     function cls:SetWorldOrigin(new_pos)
         if is_placing_building_piece() then
-            local pos, rot, match = bb_snap.apply_candidate(held_section, new_pos, self.rotation)
-            preview = { raw = vector():set(new_pos), pos = pos, rot = rot, match = match }
-            self.rotation = rot
+            local pos, heading, match = bb_snap.apply_candidate(held_section, new_pos, self.rotation)
+            local angle = bb_piece.angle_from_heading(heading)
+            preview = { raw = vector():set(new_pos), pos = pos, angle = angle, match = match }
+            -- HF draws/collides the box with aol quaternions; one built from
+            -- the same euler matches the engine for level headings
+            -- (tools/sim_snap.py, "aol preview matches engine")
+            self.rotation = aol_rotation.Quaternion(angle)
             new_pos = pos
         end
         return base_set_origin(self, new_pos)
@@ -102,11 +107,15 @@ local function hook_create_object()
             if preview and preview.raw:distance_to(location) < 0.001 then
                 -- HF passes its unsnapped place_coordinates; reuse exactly
                 -- what the player saw in the preview (snapped or levelled)
-                location, rotation, match = preview.pos, preview.rot, preview.match
+                location, rotation, match = preview.pos, vector():set(preview.angle), preview.match
             else
                 -- Preview hook did not run (e.g. HF changed); snap now
-                location, rotation, match = bb_snap.apply_candidate(section, location, rotation)
+                local heading
+                location, heading, match = bb_snap.apply_candidate(section, location, rotation)
+                rotation = bb_piece.angle_from_heading(heading)
             end
+            -- rotation is now a plain euler vector: HF stores it on the
+            -- object as-is instead of converting through aol_rotation
         end
 
         local obj_id = original(section, location, rotation, lvid, gvid)

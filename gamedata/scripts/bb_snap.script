@@ -102,14 +102,25 @@ end
 
 local last_logged_key = nil
 
+---HF candidate rotation (aol_rotation quaternion) -> level heading, using
+---the same conversion HF uses when it creates the object (to_euler_angles).
+---@param candidate_rotation aol_rotation.Quaternion|nil
+---@return number heading radians
+local function candidate_heading(candidate_rotation)
+    if not (candidate_rotation and candidate_rotation.to_euler_angles) then return 0 end
+    return bb_piece.heading_from_angle(candidate_rotation:to_euler_angles())
+end
+
 ---Applies structural snapping to an HF candidate transform.
+---Every building piece comes out level: snapped pieces take the slot's
+---position and heading, free-placed ones keep HF's position and heading.
 ---@param section string physic object section being placed
 ---@param candidate_pos vector
 ---@param candidate_rotation aol_rotation.Quaternion
----@return vector position, aol_rotation.Quaternion rotation, table|nil match
+---@return vector position, number heading, table|nil match
 function apply_candidate(section, candidate_pos, candidate_rotation)
     local definition = bb_piece.get_definition(section)
-    if not definition then return candidate_pos, candidate_rotation, nil end
+    if not definition then return candidate_pos, candidate_heading(candidate_rotation), nil end
 
     local match = find_best_snap(candidate_pos, definition)
 
@@ -118,19 +129,17 @@ function apply_candidate(section, candidate_pos, candidate_rotation)
     if key ~= last_logged_key then
         last_logged_key = key
         if match then
-            log("snap %s -> obj=%s (%s) socket=%s slot=%s dist=%.2f structure=%s",
+            log("snap %s -> obj=%s (%s) socket=%s slot=%s dist=%.2f structure=%s heading_deg=%.2f",
                 section, tostring(match.piece.object_id), match.piece.section,
                 match.socket.name, tostring(match.slot.index), match.distance,
-                tostring(match.piece.structure_id))
+                tostring(match.piece.structure_id), math.deg(match.slot.heading))
         else
             log("no snap for %s at (%.2f, %.2f, %.2f)", section, candidate_pos.x, candidate_pos.y, candidate_pos.z)
         end
     end
 
     if not match then
-        -- Free placement (first foundation): keep HF's position and heading
-        -- but stand the piece level
-        return candidate_pos, bb_piece.upright_rotation(candidate_rotation), nil
+        return candidate_pos, candidate_heading(candidate_rotation), nil
     end
-    return vector():set(match.slot.world_pos), match.slot.rotation, match
+    return vector():set(match.slot.world_pos), match.slot.heading, match
 end

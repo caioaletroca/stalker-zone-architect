@@ -1,0 +1,134 @@
+-- Keeps placed building pieces exactly where they were placed across
+-- save/load and offline/online switches.
+--
+-- Why: when a physic_object goes offline or the game is saved, the engine
+-- stores a snapshot of every bone's physics state on the server object
+-- (CPHSkeleton::SaveNetState -> CSE_PHSkeleton flSavedData + saved_bones).
+-- That snapshot is quantised: positions to 8 bits inside the bones' bounding
+-- range and rotations as an 8-bit-per-component quaternion
+-- (SPHNetState::net_Save -> w_vec_q8 / w_qt_q8). On the next spawn
+-- CPHSkeleton::RestoreNetState applies it instead of the exact float
+-- position/angle, so pieces twist by up to about a degree on every reload.
+--
+-- Fix: right before a building piece switches online, drop the snapshot
+-- (clear flSavedData and its data from the STATE packet) and restore the
+-- exact placement transform saved in bb data. Pieces have fixed bones and
+-- never need their physics state restored.
+--
+-- Sources: xray-monolith src/xrGame/PHSkeleton.cpp,
+-- src/xrServerEntities/PHNetState.cpp, xrServer_Objects.cpp.
+
+local FL_SAVED_DATA = 4              -- CSE_PHSkeleton::flSavedData
+-- SPHBonesData::net_Save: u64 bones_mask, u16 root_bone, vec3 min, vec3 max
+local BONES_HEADER_SIZE = 8 + 2 + 12 + 12
+-- SPHNetState::net_Save(P, min, max): 3 x q8 position, 4 x q8 quaternion, u8 enabled
+local BONE_RECORD_SIZE = 3 + 4 + 1
+
+local installed = false
+
+local function log(fmt, ...)
+    if bb_debug then bb_debug.log("physics", fmt, ...) end
+end
+
+---Removes the quantised physics snapshot from a physic object's STATE.
+---@param se_obj cse_alife_object_physic
+---@return boolean stripped
+local function strip_saved_physics(se_obj)
+    local pk = net_packet()
+    pk:w_begin(0)
+    se_obj:STATE_Write(pk)
+    pk:r_seek(2)
+
+    local t = {}
+    utils_stpk.parse_cse_alife_object_properties_packet(t, pk)
+    utils_stpk.parse_cse_visual_properties_packet(t, pk)
+    utils_stpk.parse_cse_ph_skeleton_properties_packet(t, pk)
+
+    if bit_and(t.skeleton_flags, FL_SAVED_DATA) == 0 then return false end
+
+    -- Skip the saved bones block that sits between the skeleton and the
+    -- physic properties (utils_stpk does not parse it)
+    pk:r_advance(BONES_HEADER_SIZE)
+    local bones = pk:r_u16()
+    pk:r_advance(bones * BONE_RECORD_SIZE)
+    utils_stpk.parse_cse_alife_object_physic_properties_packet(t, pk)
+
+    t.skeleton_flags = bit_and(t.skeleton_flags, bit_not(FL_SAVED_DATA))
+    utils_stpk.set_physic_data(t, se_obj)
+    return true
+end
+
+---Puts the server object back on its exact placement transform.
+---@param se_obj cse_alife_object
+---@return boolean restored
+local function restore_transform(se_obj)
+    local bb_data = bb_piece.get_data(se_obj.id)
+    if not (bb_data and bb_data.px) then return false end
+
+    local pos = vector():set(bb_data.px, bb_data.py, bb_data.pz)
+    local angle = vector():set(bb_data.ax, bb_data.ay, bb_data.az)
+    -- can_switch_online runs often for offline objects; skip no-op writes
+    if se_obj.position:distance_to(pos) < 0.0001 and se_obj.angle:distance_to(angle) < 0.00001 then
+        return false
+    end
+
+    local ok, err = pcall(function()
+        se_obj.position = pos
+        se_obj.angle = angle
+    end)
+    if not ok then
+        log("Could not restore transform for obj_id=%s: %s", tostring(se_obj.id), tostring(err))
+        return false
+    end
+    return true
+end
+
+---Prepares a building piece's server object for spawning online.
+---@param se_obj cse_alife_object
+function prepare_for_spawn(se_obj)
+    if not (se_obj and bb_piece.get_definition(se_obj:section_name())) then return end
+
+    local ok, stripped = pcall(strip_saved_physics, se_obj)
+    if not ok then
+        log("Failed to strip physics snapshot for obj_id=%s: %s", tostring(se_obj.id), tostring(stripped))
+        stripped = false
+    end
+    local restored = restore_transform(se_obj)
+
+    if stripped or restored then
+        log("Prepared obj_id=%s for spawn (snapshot dropped=%s, transform restored=%s)",
+            tostring(se_obj.id), tostring(stripped), tostring(restored))
+    end
+end
+
+local function server_entity_on_register(se_obj)
+    -- Runs while a save is being loaded, before objects go online. bb data
+    -- may not be readable this early; the can_switch_online hook below
+    -- covers the transform in that case.
+    if se_obj and not se_obj.online then prepare_for_spawn(se_obj) end
+end
+
+local function hook_switch_online()
+    local cls = se_item and se_item.se_physic
+    if not (cls and cls.can_switch_online) then
+        log("se_item.se_physic not found; online-switch hook not installed")
+        return false
+    end
+
+    local base_can_switch_online = cls.can_switch_online
+    function cls:can_switch_online()
+        local allowed = base_can_switch_online(self)
+        if allowed and not self.online then prepare_for_spawn(self) end
+        return allowed
+    end
+    return true
+end
+
+function install()
+    if installed then return end
+    installed = true
+    RegisterScriptCallback("server_entity_on_register", server_entity_on_register)
+    if hook_switch_online() then
+        log("Installed physics snapshot hooks")
+    end
+end

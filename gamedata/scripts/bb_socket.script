@@ -19,7 +19,7 @@ SLAB_T = 0.2
 --   socket.pos    local position the crosshair is compared against
 --   slot.accepts  snap classes that may use the slot
 --   slot.offset   local position of the held piece's origin
---   slot.yaw      local heading of the held piece, degrees around +Y
+--   slot.yaw      heading of the held piece relative to the target, degrees
 --
 -- Slots are resolved in the target piece's frame, so the held piece always
 -- inherits the structure's orientation: structure geometry beats terrain.
@@ -80,8 +80,6 @@ local SOCKET_DEFINITIONS = {
     },
 }
 
-local UP = vector():set(0, 1, 0)
-
 ---Gets socket templates for a profile.
 ---@param profile_name string
 ---@return table|nil
@@ -97,27 +95,24 @@ function generate_world_sockets(piece)
     local profile = get_profile(piece.socket_profile)
     if not profile then return sockets end
 
-    local q_rot = piece.rotation
+    local heading = piece.heading
 
     for _, tmpl in ipairs(profile) do
         local slots = {}
         for i, slot in ipairs(tmpl.slots) do
-            local q_yaw = aol_rotation.get_rotation_around(UP, math.rad(slot.yaw))
             table.insert(slots, {
                 index     = i,
                 accepts   = slot.accepts,
-                world_pos = vector():set(piece.position):add(q_rot:rotate_vector(slot.offset)),
-                -- aol_rotation's axis swaps make a:multiply(b) apply a first,
-                -- then b: local yaw first, then the piece's rotation.
-                -- Verified offline by tools/sim_snap.py.
-                rotation  = q_yaw:multiply(q_rot),
+                world_pos = vector():set(piece.position):add(bb_piece.rotate_yaw(slot.offset, heading)),
+                -- Pieces are level, so headings simply add up
+                heading   = bb_piece.wrap_angle(heading + math.rad(slot.yaw)),
             })
         end
 
         table.insert(sockets, {
             owner_id  = piece.object_id,
             name      = tmpl.name,
-            world_pos = vector():set(piece.position):add(q_rot:rotate_vector(tmpl.pos)),
+            world_pos = vector():set(piece.position):add(bb_piece.rotate_yaw(tmpl.pos, heading)),
             slots     = slots,
         })
     end
