@@ -2,63 +2,85 @@ local function log(fmt, ...)
     if bb_debug then bb_debug.log("socket", fmt, ...) end
 end
 
--- Declarative socket templates per profile.
+-- Module dimensions (metres). Keep in sync with tools/blender/build_greybox.py.
 --
--- Offsets are in X-Ray local metres relative to the object origin.
 -- X-Ray is Y-up: x = right, y = up, z = forward.
+-- Every greybox piece has its origin at the bottom centre:
+--   foundation / roof : 2.5 (x) by 2.5 (z), 0.2 thick
+--   wall / doorway    : 2.5 wide (x), 3.0 tall (y), 0.2 thick (z)
+CELL   = 2.5
+HALF   = CELL / 2.0
+WALL_H = 3.0
+SLAB_T = 0.2
+
+-- A profile is a list of sockets. A socket is a point on the piece the player
+-- aims at; each of its slots describes where a compatible held piece goes:
 --
--- Prototype greybox modules (authored in assets/blender/bb_prototype_pieces.blend):
---   foundation / roof : 2.5 x 2.5 x 0.2 m, origin at base centre
---   wall              : 2.5 wide x 2.5 tall x 0.2 thick, origin at base centre
+--   socket.pos    local position the crosshair is compared against
+--   slot.accepts  snap classes that may use the slot
+--   slot.offset   local position of the held piece's origin
+--   slot.yaw      local heading of the held piece, degrees around +Y
 --
--- Because the origin sits at the base of each mesh, vertical sockets are
--- measured from y=0 (bottom) upwards, NOT from a centre point.
-local CELL = 2.5
-local HALF = CELL / 2.0     -- 1.25
-local WALL_H = 2.5
-local SLAB_T = 0.2
+-- Slots are resolved in the target piece's frame, so the held piece always
+-- inherits the structure's orientation: structure geometry beats terrain.
+
+-- Edge sockets shared by slabs (foundations and flat roofs). A slab accepts a
+-- neighbouring slab of its own class one cell out, and a wall on the edge line.
+local EDGES = {
+    { name = "north", dx =  0, dz =  1, yaw =   0 },
+    { name = "south", dx =  0, dz = -1, yaw = 180 },
+    { name = "east",  dx =  1, dz =  0, yaw =  90 },
+    { name = "west",  dx = -1, dz =  0, yaw = -90 },
+}
+
+local function slab_profile(own_class)
+    local sockets = {}
+    for _, e in ipairs(EDGES) do
+        table.insert(sockets, {
+            name = e.name,
+            pos  = vector():set(e.dx * HALF, SLAB_T, e.dz * HALF),
+            slots = {
+                { accepts = { [own_class] = true }, offset = vector():set(e.dx * CELL, 0, e.dz * CELL), yaw = 0 },
+                { accepts = { wall = true },        offset = vector():set(e.dx * HALF, SLAB_T, e.dz * HALF), yaw = e.yaw },
+            },
+        })
+    end
+    return sockets
+end
 
 local SOCKET_DEFINITIONS = {
+    foundation_standard = slab_profile("foundation"),
+    roof_flat_standard  = slab_profile("roof_flat"),
+
     wall_standard = {
         {
+            -- Roof can sit on either side of the wall; the slot nearer the
+            -- player wins the tie (see bb_snap).
             name = "top",
-            type = "wall_top",
-            local_pos = vector():set(0, WALL_H, 0),
-            accepts = { wall_bottom = true, roof_edge = true },
-        },
-        {
-            name = "bottom",
-            type = "wall_bottom",
-            local_pos = vector():set(0, 0, 0),
-            accepts = { foundation_edge = true, floor_edge = true, wall_top = true },
+            pos  = vector():set(0, WALL_H, 0),
+            slots = {
+                { accepts = { roof_flat = true }, offset = vector():set(0, WALL_H,  HALF), yaw = 0 },
+                { accepts = { roof_flat = true }, offset = vector():set(0, WALL_H, -HALF), yaw = 0 },
+            },
         },
         {
             name = "left",
-            type = "wall_left",
-            local_pos = vector():set(-HALF, WALL_H / 2.0, 0),
-            accepts = { wall_right = true },
+            pos  = vector():set(-HALF, WALL_H / 2.0, 0),
+            slots = {
+                { accepts = { wall = true }, offset = vector():set(-CELL, 0, 0), yaw = 0 },
+            },
         },
         {
             name = "right",
-            type = "wall_right",
-            local_pos = vector():set(HALF, WALL_H / 2.0, 0),
-            accepts = { wall_left = true },
+            pos  = vector():set(HALF, WALL_H / 2.0, 0),
+            slots = {
+                { accepts = { wall = true }, offset = vector():set(CELL, 0, 0), yaw = 0 },
+            },
         },
     },
-    foundation_standard = {
-        { name = "north", type = "foundation_edge", local_pos = vector():set(0, SLAB_T, HALF),  accepts = { foundation_edge = true, wall_bottom = true } },
-        { name = "south", type = "foundation_edge", local_pos = vector():set(0, SLAB_T, -HALF), accepts = { foundation_edge = true, wall_bottom = true } },
-        { name = "east",  type = "foundation_edge", local_pos = vector():set(HALF, SLAB_T, 0),  accepts = { foundation_edge = true, wall_bottom = true } },
-        { name = "west",  type = "foundation_edge", local_pos = vector():set(-HALF, SLAB_T, 0), accepts = { foundation_edge = true, wall_bottom = true } },
-    },
-    roof_flat_standard = {
-        { name = "bottom", type = "roof_edge",  local_pos = vector():set(0, 0, 0),           accepts = { wall_top = true } },
-        { name = "north",  type = "floor_edge", local_pos = vector():set(0, SLAB_T, HALF),   accepts = { floor_edge = true, wall_bottom = true } },
-        { name = "south",  type = "floor_edge", local_pos = vector():set(0, SLAB_T, -HALF),  accepts = { floor_edge = true, wall_bottom = true } },
-        { name = "east",   type = "floor_edge", local_pos = vector():set(HALF, SLAB_T, 0),   accepts = { floor_edge = true, wall_bottom = true } },
-        { name = "west",   type = "floor_edge", local_pos = vector():set(-HALF, SLAB_T, 0),  accepts = { floor_edge = true, wall_bottom = true } },
-    },
 }
+
+local UP = vector():set(0, 1, 0)
 
 ---Gets socket templates for a profile.
 ---@param profile_name string
@@ -67,39 +89,38 @@ function get_profile(profile_name)
     return SOCKET_DEFINITIONS[profile_name]
 end
 
----Generates world sockets for a runtime piece.
----@param piece table
+---Expands a registered piece into world-space sockets and slots.
+---@param piece table runtime piece from bb_piece.build
 ---@return table sockets
 function generate_world_sockets(piece)
     local sockets = {}
     local profile = get_profile(piece.socket_profile)
     if not profile then return sockets end
 
-    local q_rot = piece.rotation or aol_rotation.Quaternion(piece.angle)
+    local q_rot = piece.rotation
 
-    for i, tmpl in ipairs(profile) do
-        local world_offset = q_rot:rotate_vector(tmpl.local_pos)
-        local world_pos = vector():set(piece.position):add(world_offset)
+    for _, tmpl in ipairs(profile) do
+        local slots = {}
+        for i, slot in ipairs(tmpl.slots) do
+            local q_yaw = aol_rotation.get_rotation_around(UP, math.rad(slot.yaw))
+            table.insert(slots, {
+                index     = i,
+                accepts   = slot.accepts,
+                world_pos = vector():set(piece.position):add(q_rot:rotate_vector(slot.offset)),
+                -- aol_rotation's axis swaps make a:multiply(b) apply a first,
+                -- then b: local yaw first, then the piece's rotation.
+                -- Verified offline by tools/sim_snap.py.
+                rotation  = q_yaw:multiply(q_rot),
+            })
+        end
 
         table.insert(sockets, {
-            owner_id   = piece.object_id,
-            name       = tmpl.name,
-            type       = tmpl.type,
-            accepts    = tmpl.accepts,
-            world_pos  = world_pos,
-            local_pos  = vector():set(tmpl.local_pos),
-            orientation = piece.angle,
+            owner_id  = piece.object_id,
+            name      = tmpl.name,
+            world_pos = vector():set(piece.position):add(q_rot:rotate_vector(tmpl.pos)),
+            slots     = slots,
         })
     end
 
     return sockets
-end
-
----Checks whether socket_a accepts socket_b type.
----@param socket_a table
----@param socket_b table
----@return boolean
-function is_compatible(socket_a, socket_b)
-    if not (socket_a and socket_b) then return false end
-    return socket_a.accepts[socket_b.type] == true
 end

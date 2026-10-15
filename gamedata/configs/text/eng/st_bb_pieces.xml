@@ -5,21 +5,28 @@
 		<text>Foundation (Prototype)</text>
 	</string>
 	<string id="st_bb_foundation_descr">
-		<text>Greybox structural foundation. 5x5m building module.</text>
+		<text>Greybox structural foundation, 2.5 x 2.5 m. Place it freely; further foundations snap to its edges.</text>
 	</string>
 
 	<string id="st_bb_wall">
 		<text>Wall (Prototype)</text>
 	</string>
 	<string id="st_bb_wall_descr">
-		<text>Greybox structural wall. 5x3m building module.</text>
+		<text>Greybox structural wall, 2.5 m wide and 3 m tall. Snaps to foundation and roof edges and to other walls.</text>
+	</string>
+
+	<string id="st_bb_wall_doorway">
+		<text>Doorway Wall (Prototype)</text>
+	</string>
+	<string id="st_bb_wall_doorway_descr">
+		<text>Greybox wall with a 1.2 x 2.2 m opening. Snaps like a regular wall.</text>
 	</string>
 
 	<string id="st_bb_roof_flat">
 		<text>Flat Roof (Prototype)</text>
 	</string>
 	<string id="st_bb_roof_flat_descr">
-		<text>Greybox flat roof panel. 5x5m building module.</text>
+		<text>Greybox flat roof / ceiling panel, 2.5 x 2.5 m. Snaps to wall tops and to other roof panels.</text>
 	</string>
 
 </string_table>

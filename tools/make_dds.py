@@ -1,5 +1,7 @@
 """Generate solid-colour DXT1 .dds textures for the base-building greybox pieces.
 
+Colours must match PIECES in tools/blender/build_greybox.py.
+
 Solid colours compress trivially: every 4x4 block stores the same colour twice
 with an all-zero index table, so no real DXT encoder is required.
 
@@ -36,6 +38,7 @@ PIECES = {
     "bb_foundation": (26, 140, 38),
     "bb_wall": (26, 77, 179),
     "bb_roof_flat": (166, 31, 31),
+    "bb_wall_doorway": (230, 150, 20),
 }
 
 

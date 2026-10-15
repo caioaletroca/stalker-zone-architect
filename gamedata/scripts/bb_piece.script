@@ -12,21 +12,33 @@ PIECE_TYPES = {
     ROOF_FLAT   = "roof_flat",
 }
 
----Reads the bb_* config block for a section.
+-- section -> definition (false when the section is not a building piece)
+local definition_cache = {}
+
+---Reads the bb_* config block for a section. Cached per section.
 ---@param section string
 ---@return table|nil definition
 function get_definition(section)
     if not section then return nil end
 
+    local cached = definition_cache[section]
+    if cached ~= nil then return cached or nil end
+
     local piece_type = ini_sys:r_string_ex(section, "bb_piece_type")
-    if not piece_type then return nil end
+    if not piece_type then
+        definition_cache[section] = false
+        return nil
+    end
 
     local size_str = ini_sys:r_string_ex(section, "bb_piece_size") or "1,1,1"
     local size_parts = str_explode(size_str, ",")
 
-    return {
+    local definition = {
         section        = section,
         piece_type     = piece_type,
+        -- Pieces sharing a snap class are interchangeable for snapping and
+        -- occupancy (e.g. wall and wall_door both use "wall")
+        snap_class     = ini_sys:r_string_ex(section, "bb_snap_class") or piece_type,
         socket_profile = ini_sys:r_string_ex(section, "bb_socket_profile") or piece_type,
         size = vector():set(
             tonumber(size_parts[1]) or 1,
@@ -34,6 +46,8 @@ function get_definition(section)
             tonumber(size_parts[3]) or 1
         ),
     }
+    definition_cache[section] = definition
+    return definition
 end
 
 ---@param obj_id number
@@ -59,10 +73,19 @@ end
 ---@param bb_data table
 function set_data(obj_id, bb_data)
     hf_obj_manager.update_data(obj_id, { bb = bb_data })
-    log("Saved bb data for obj_id=%s", tostring(obj_id))
+    log("Saved bb data for obj_id=%s structure=%s", tostring(obj_id), tostring(bb_data.structure_id))
 end
 
----Builds the runtime piece record from a live/server object.
+---Level id of a server object, used to keep structures on different maps apart.
+---@param se_obj cse_alife_object
+---@return number|nil
+function get_level_id(se_obj)
+    local gvid = se_obj and se_obj.m_game_vertex_id
+    if not gvid then return nil end
+    return game_graph():vertex(gvid):level_id()
+end
+
+---Builds the runtime piece record from a server object.
 ---@param obj_id number
 ---@return table|nil
 function build(obj_id)
@@ -73,19 +96,20 @@ function build(obj_id)
     if not definition then return nil end
 
     local bb_data = get_data(obj_id) or {}
+    local angle = vector():set(obj.angle)
 
     return {
         object_id      = obj_id,
         section        = obj:section_name(),
         piece_type     = definition.piece_type,
+        snap_class     = definition.snap_class,
         socket_profile = definition.socket_profile,
         size           = definition.size,
         position       = vector():set(obj.position),
-        angle          = vector():set(obj.angle),
+        angle          = angle,
+        rotation       = aol_rotation.Quaternion(angle),
+        level_id       = get_level_id(obj),
         structure_id   = bb_data.structure_id,
-        gx             = bb_data.gx,
-        gy             = bb_data.gy,
-        gz             = bb_data.gz,
-        orientation    = bb_data.orientation,
+        attached_to    = bb_data.attached_to,
     }
 end

@@ -2,29 +2,43 @@ local function log(fmt, ...)
     if bb_debug then bb_debug.log("snap", fmt, ...) end
 end
 
-SNAP_RADIUS = 1.0
-SEARCH_RADIUS = 12.0
+-- Max distance between the crosshair point and a socket for a snap
+SNAP_RADIUS = 1.5
+-- Only pieces whose origin is this close to the crosshair are considered
+SEARCH_RADIUS = 8.0
+-- A slot counts as taken when a piece of the same snap class sits this close
+OCCUPIED_EPSILON = 0.15
+-- Snapped pieces skip HF's ray collision test: the structure decides where
+-- they go, and neighbours/terrain would otherwise block most snaps
+IGNORE_COLLISION_WHEN_SNAPPED = true
 
 function get_snap_radius()
     return SNAP_RADIUS
 end
 
 function set_snap_radius(radius)
-    SNAP_RADIUS = radius or 1.0
+    SNAP_RADIUS = radius or 1.5
 end
 
----Collects sockets from registered pieces near a position.
+local function current_level_id()
+    return alife():level_id()
+end
+
+---Pieces on the current level close to a position.
 ---@param position vector
----@param radius number|nil
----@return table sockets
-function collect_nearby_sockets(position, radius)
-    radius = radius or SEARCH_RADIUS
+---@return table pieces
+function collect_nearby_pieces(position)
     local found = {}
+    local level_id = current_level_id()
 
     for obj_id, piece in pairs(bb_registry.get_all_pieces()) do
-        if position:distance_to(piece.position) <= radius then
-            for _, socket in ipairs(bb_socket.generate_world_sockets(piece)) do
-                table.insert(found, socket)
+        if piece.level_id == level_id and position:distance_to(piece.position) <= SEARCH_RADIUS then
+            -- Drop pieces whose object was released without a callback
+            local se_obj = alife_object(obj_id)
+            if se_obj and se_obj:section_name() == piece.section then
+                table.insert(found, piece)
+            else
+                bb_registry.unregister_piece(obj_id)
             end
         end
     end
@@ -32,97 +46,86 @@ function collect_nearby_sockets(position, radius)
     return found
 end
 
----Finds the nearest compatible socket pair for a held piece.
----@param candidate_pos vector Candidate placement position from HF
----@param held_piece table Runtime piece definition of the held item
----@return table|nil match {target_socket, held_socket, distance}
-local function get_crosshair_object_id()
-    local obj = level.get_target_obj()
-    if not obj then return nil end
-    return obj:id()
+---True when a registered piece of `snap_class` already occupies `world_pos`.
+---@param world_pos vector
+---@param snap_class string
+---@param pieces table nearby pieces
+---@return boolean
+function is_slot_occupied(world_pos, snap_class, pieces)
+    for _, piece in ipairs(pieces) do
+        if piece.snap_class == snap_class and piece.position:distance_to(world_pos) <= OCCUPIED_EPSILON then
+            return true
+        end
+    end
+    return false
 end
 
-function find_best_snap(candidate_pos, held_piece)
-    if not (candidate_pos and held_piece) then return nil end
+---Finds the best free slot for a held piece near the crosshair.
+---Score is the crosshair-to-socket distance; ties (e.g. a roof on either side
+---of a wall) go to the slot nearer the player.
+---@param candidate_pos vector HF's candidate placement position
+---@param definition table held piece definition (bb_piece.get_definition)
+---@return table|nil match {piece, socket, slot, distance}
+function find_best_snap(candidate_pos, definition)
+    if not (candidate_pos and definition) then return nil end
 
-    local crosshair_object_id = get_crosshair_object_id()
+    local actor_pos = db.actor and db.actor:position() or candidate_pos
+    local pieces = collect_nearby_pieces(candidate_pos)
     local best = nil
 
-    for _, target in ipairs(collect_nearby_sockets(candidate_pos)) do
-        local requires_crosshair_target = target.type == "wall_left"
-            or target.type == "wall_right"
-            or target.type == "foundation_edge"
-        local is_crosshair_target = crosshair_object_id == target.owner_id
-
-        if not target.occupied and (not requires_crosshair_target or is_crosshair_target) then
-            local target_rotation = aol_rotation.Quaternion(target.orientation)
-            local held_sockets = bb_socket.generate_world_sockets({
-                object_id      = -1,
-                position       = candidate_pos,
-                rotation       = target_rotation,
-                socket_profile = held_piece.socket_profile,
-            })
-
-            for _, held in ipairs(held_sockets) do
-                if bb_socket.is_compatible(target, held) then
-                    local requires_crosshair_target = target.type == "wall_left"
-                        or target.type == "wall_right"
-                        or target.type == "foundation_edge"
-                    local dist = requires_crosshair_target
-                        and candidate_pos:distance_to(target.world_pos)
-                        or target.world_pos:distance_to(held.world_pos)
-
-                    if dist <= SNAP_RADIUS and (not best or dist < best.distance) then
-                        best = {
-                            target_socket = target,
-                            held_socket = held,
-                            rotation = target_rotation,
-                            distance = dist,
-                        }
+    for _, piece in ipairs(pieces) do
+        for _, socket in ipairs(bb_socket.generate_world_sockets(piece)) do
+            local dist = candidate_pos:distance_to(socket.world_pos)
+            if dist <= SNAP_RADIUS then
+                for _, slot in ipairs(socket.slots) do
+                    if slot.accepts[definition.snap_class]
+                        and not is_slot_occupied(slot.world_pos, definition.snap_class, pieces) then
+                        local score = dist + 0.001 * actor_pos:distance_to(slot.world_pos)
+                        if not best or score < best.score then
+                            best = {
+                                piece    = piece,
+                                socket   = socket,
+                                slot     = slot,
+                                distance = dist,
+                                score    = score,
+                            }
+                        end
                     end
                 end
             end
         end
     end
 
-    if best then
-        log("Snap candidate: target=%s held=%s dist=%.3f",
-            best.target_socket.name, best.held_socket.name, best.distance)
-    end
-
     return best
 end
 
----Derives the snapped world position for a matched socket pair.
----Rotation handling is deliberately deferred until the compat layer exists,
----so orientation can be validated against live HF preview data.
+local last_logged_key = nil
+
+---Applies structural snapping to an HF candidate transform.
+---@param section string physic object section being placed
 ---@param candidate_pos vector
----@param match table
----@return vector snapped_position
-function calculate_snapped_position(candidate_pos, match)
-    if not match then return candidate_pos end
-
-    local delta = vector():set(match.target_socket.world_pos):sub(match.held_socket.world_pos)
-    return vector():set(candidate_pos):add(delta)
-end
-
-function get_definition(section)
-    return bb_piece.get_definition(section)
-end
-
+---@param candidate_rotation aol_rotation.Quaternion
+---@return vector position, aol_rotation.Quaternion rotation, table|nil match
 function apply_candidate(section, candidate_pos, candidate_rotation)
-    local definition = get_definition(section)
+    local definition = bb_piece.get_definition(section)
     if not definition then return candidate_pos, candidate_rotation, nil end
 
     local match = find_best_snap(candidate_pos, definition)
+
+    -- Log only when the snap target changes; this runs every frame in preview
+    local key = match and (match.piece.object_id .. ":" .. match.socket.name .. ":" .. match.slot.index) or "none"
+    if key ~= last_logged_key then
+        last_logged_key = key
+        if match then
+            log("snap %s -> obj=%s (%s) socket=%s slot=%s dist=%.2f structure=%s",
+                section, tostring(match.piece.object_id), match.piece.section,
+                match.socket.name, tostring(match.slot.index), match.distance,
+                tostring(match.piece.structure_id))
+        else
+            log("no snap for %s at (%.2f, %.2f, %.2f)", section, candidate_pos.x, candidate_pos.y, candidate_pos.z)
+        end
+    end
+
     if not match then return candidate_pos, candidate_rotation, nil end
-
-    local snapped_pos = calculate_snapped_position(candidate_pos, match)
-    log("Snap accepted: section=%s owner=%s socket=%s distance=%.3f",
-        section,
-        tostring(match.target_socket.owner_id),
-        match.target_socket.name,
-        match.distance)
-
-    return snapped_pos, match.rotation, match
+    return vector():set(match.slot.world_pos), match.slot.rotation, match
 end

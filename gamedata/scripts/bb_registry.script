@@ -1,6 +1,8 @@
 local pieces_by_id = {}
 local structure_ids = {}
 
+local MAX_OBJECT_ID = 65534
+
 local function log(fmt, ...)
     if bb_debug then bb_debug.log("registry", fmt, ...) end
 end
@@ -9,18 +11,32 @@ local function make_structure_id(obj_id)
     return "bb_" .. tostring(obj_id)
 end
 
+local function remove_from_structure(piece)
+    local structure = structure_ids[piece.structure_id]
+    if not structure then return end
+    structure[piece.object_id] = nil
+    if not next(structure) then
+        structure_ids[piece.structure_id] = nil
+    end
+end
+
+---Registers (or refreshes) a structural piece. A piece without a saved
+---structure_id starts a new structure rooted at itself.
 ---@param obj_id number
 ---@return table|nil
 function register_piece(obj_id)
     local piece = bb_piece.build(obj_id)
     if not piece then return nil end
 
-    local bb_data = bb_piece.get_data(obj_id) or {}
-    if not bb_data.structure_id then
+    if not piece.structure_id then
+        local bb_data = bb_piece.get_data(obj_id) or {}
         bb_data.structure_id = make_structure_id(obj_id)
         bb_piece.set_data(obj_id, bb_data)
         piece.structure_id = bb_data.structure_id
     end
+
+    local previous = pieces_by_id[obj_id]
+    if previous then remove_from_structure(previous) end
 
     pieces_by_id[obj_id] = piece
     structure_ids[piece.structure_id] = structure_ids[piece.structure_id] or {}
@@ -34,14 +50,7 @@ function unregister_piece(obj_id)
     local piece = pieces_by_id[obj_id]
     if not piece then return end
 
-    local structure = structure_ids[piece.structure_id]
-    if structure then
-        structure[obj_id] = nil
-        if not next(structure) then
-            structure_ids[piece.structure_id] = nil
-        end
-    end
-
+    remove_from_structure(piece)
     pieces_by_id[obj_id] = nil
     log("Unregistered obj_id=%s", tostring(obj_id))
 end
@@ -70,16 +79,21 @@ function count()
     return total
 end
 
+---Reconstructs the registry from server objects after a load.
+---HF only runs placeable_type initialisers when an object is first created,
+---so pieces from a save must be rediscovered here. bb data itself lives in
+---HF's per-object storage (hf_obj_manager), which survives save/load.
 function rebuild()
     pieces_by_id = {}
     structure_ids = {}
 
-    alife():iterate_objects(function(se_obj)
-        local placeable_type = hf_furniture_types.get_type(se_obj)
-        if placeable_type == "building_piece" or placeable_type == "bb_piece" then
-            register_piece(se_obj.id)
+    local sim = alife()
+    for id = 1, MAX_OBJECT_ID do
+        local se_obj = sim:object(id)
+        if se_obj and bb_piece.get_definition(se_obj:section_name()) then
+            register_piece(id)
         end
-    end)
+    end
 
     log("Rebuilt registry, pieces=%s", tostring(count()))
 end

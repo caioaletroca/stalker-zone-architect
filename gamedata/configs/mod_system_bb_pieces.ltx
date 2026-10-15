@@ -1,7 +1,19 @@
+; Base Building greybox pieces.
+;
+; Each piece is an inventory item (bb_item_*) that HF turns into a placed
+; physic object (bb_*). Meshes come from tools/blender/build_greybox.py.
+;
+; bounding_box_size   = HF order: width (x), length (z), height (y).
+;                       Inset 6cm so neighbouring pieces do not touch.
+; bounding_box_origin = x, y, z centre of that box relative to the origin.
+; bb_piece_size       = x, y, z extents (documentation / future use).
+; bb_snap_class       = pieces with the same class share slots/occupancy.
+; bb_socket_profile   = socket layout in bb_socket.script.
+
 [bb_item_foundation]:tch_junk
 class                                   = II_ATTCH
 kind                                    = i_tool
-visual                                  = dynamics\Decor\wall.ogf
+visual                                  = base_building\bb_foundation.ogf
 
 description                             = st_bb_foundation_descr
 inv_name                                = st_bb_foundation
@@ -17,36 +29,38 @@ inv_grid_height                         = 1
 cost                                    = 100
 inv_weight                              = 5
 
-use1_functor                           = placeable_furniture.place_item
-use1_action_functor                    = placeable_furniture.func_place_item
+use1_functor                            = placeable_furniture.place_item
+use1_action_functor                     = placeable_furniture.func_place_item
 
 placeable_type                          = building_piece
 placeable_section                       = bb_foundation
 
 [bb_foundation]:physic_object
-visual                                  = dynamics\Decor\wall.ogf
+visual                                  = base_building\bb_foundation.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_foundation
 
-bounding_box_size                       = 2.5, 2.5, 0.2
+bounding_box_size                       = 2.44, 2.44, 0.16
 bounding_box_origin                     = 0.0, 0.1, 0.0
 
 bb_piece_type                           = foundation
-bb_piece_size                           = 2.5, 2.5, 0.2
+bb_snap_class                           = foundation
+bb_piece_size                           = 2.5, 0.2, 2.5
 bb_socket_profile                       = foundation_standard
 
 [bb_item_wall]:tch_junk
 class                                   = II_ATTCH
 kind                                    = i_tool
-visual                                  = dynamics\Decor\wall02.ogf
+visual                                  = base_building\bb_wall.ogf
 
 description                             = st_bb_wall_descr
 inv_name                                = st_bb_wall
 inv_name_short                          = st_bb_wall
 
+; Borrow EMHF decor icon sheet for the greybox stage
 icons_texture                           = ui\ui_decor
 inv_grid_x                              = 11
 inv_grid_y                              = 15
@@ -56,39 +70,38 @@ inv_grid_height                         = 1
 cost                                    = 100
 inv_weight                              = 5
 
-use1_functor                           = placeable_furniture.place_item
-use1_action_functor                    = placeable_furniture.func_place_item
+use1_functor                            = placeable_furniture.place_item
+use1_action_functor                     = placeable_furniture.func_place_item
 
 placeable_type                          = building_piece
 placeable_section                       = bb_wall
 
 [bb_wall]:physic_object
-visual                                  = dynamics\Decor\wall02.ogf
+visual                                  = base_building\bb_wall.ogf
 placeable_type                          = building_piece
 base_rotation                           = 0
 
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_wall
 
-; Keep structural sockets on the 2.5m grid, but inset the HF collision box
-; so adjacent walls leave 6cm clearance and do not ray-collide at a boundary.
-bounding_box_size                       = 2.44, 0.16, 2.44
-bounding_box_origin                     = 0.0, 1.25, 0.0
+bounding_box_size                       = 2.44, 0.16, 2.94
+bounding_box_origin                     = 0.0, 1.5, 0.0
 
-; bb_piece_size is X-Ray local extents: x (width), y (up/height), z (depth)
 bb_piece_type                           = wall
-bb_piece_size                           = 2.5, 2.5, 0.2
+bb_snap_class                           = wall
+bb_piece_size                           = 2.5, 3.0, 0.2
 bb_socket_profile                       = wall_standard
 
-[bb_item_roof_flat]:tch_junk
+[bb_item_wall_doorway]:tch_junk
 class                                   = II_ATTCH
 kind                                    = i_tool
-visual                                  = dynamics\Decor\wall.ogf
+visual                                  = base_building\bb_wall_doorway.ogf
 
-description                             = st_bb_roof_flat_descr
-inv_name                                = st_bb_roof_flat
-inv_name_short                          = st_bb_roof_flat
+description                             = st_bb_wall_doorway_descr
+inv_name                                = st_bb_wall_doorway
+inv_name_short                          = st_bb_wall_doorway
 
+; Borrow EMHF decor icon sheet for the greybox stage
 icons_texture                           = ui\ui_decor
 inv_grid_x                              = 8
 inv_grid_y                              = 15
@@ -98,8 +111,49 @@ inv_grid_height                         = 1
 cost                                    = 100
 inv_weight                              = 5
 
-use1_functor                           = placeable_furniture.place_item
-use1_action_functor                    = placeable_furniture.func_place_item
+use1_functor                            = placeable_furniture.place_item
+use1_action_functor                     = placeable_furniture.func_place_item
+
+placeable_type                          = building_piece
+placeable_section                       = bb_wall_doorway
+
+[bb_wall_doorway]:physic_object
+visual                                  = base_building\bb_wall_doorway.ogf
+placeable_type                          = building_piece
+base_rotation                           = 0
+
+script_binding                          = bind_hf_base.init
+item_section                            = bb_item_wall_doorway
+
+bounding_box_size                       = 2.44, 0.16, 2.94
+bounding_box_origin                     = 0.0, 1.5, 0.0
+
+bb_piece_type                           = wall_door
+bb_snap_class                           = wall
+bb_piece_size                           = 2.5, 3.0, 0.2
+bb_socket_profile                       = wall_standard
+
+[bb_item_roof_flat]:tch_junk
+class                                   = II_ATTCH
+kind                                    = i_tool
+visual                                  = base_building\bb_roof_flat.ogf
+
+description                             = st_bb_roof_flat_descr
+inv_name                                = st_bb_roof_flat
+inv_name_short                          = st_bb_roof_flat
+
+; Borrow EMHF decor icon sheet for the greybox stage
+icons_texture                           = ui\ui_decor
+inv_grid_x                              = 5
+inv_grid_y                              = 16
+inv_grid_width                          = 3
+inv_grid_height                         = 1
+
+cost                                    = 100
+inv_weight                              = 5
+
+use1_functor                            = placeable_furniture.place_item
+use1_action_functor                     = placeable_furniture.func_place_item
 
 placeable_type                          = building_piece
 placeable_section                       = bb_roof_flat
@@ -112,9 +166,10 @@ base_rotation                           = 0
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_roof_flat
 
-bounding_box_size                       = 2.5, 2.5, 0.2
+bounding_box_size                       = 2.44, 2.44, 0.16
 bounding_box_origin                     = 0.0, 0.1, 0.0
 
 bb_piece_type                           = roof_flat
-bb_piece_size                           = 2.5, 2.5, 0.2
+bb_snap_class                           = roof_flat
+bb_piece_size                           = 2.5, 0.2, 2.5
 bb_socket_profile                       = roof_flat_standard

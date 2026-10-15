@@ -1,50 +1,143 @@
-local original_create_object = nil
+-- All dependencies on Hideout Furniture internals live in this file.
+--
+-- HF's placement loop (placeable_furniture.actor_on_update) is a local
+-- function, so it cannot be wrapped directly. Instead we hook the public
+-- pieces it calls, in order, every preview frame:
+--
+--   placeable_furniture.start_placing_item(section)  -> remember held section
+--   bbox.rotation = q                                 (HF candidate rotation)
+--   bbox:SetWorldOrigin(pos)                          -> snap pos + rotation
+--   bbox:UpdateBBox()
+--   bbox:CheckForCollisions()                         -> skip when snapped
+--   ...on confirm...
+--   placeable_furniture.create_object(section, place_coordinates, bbox.rotation)
+--                                                     -> reuse preview snap
+--
+-- HF internals relied on (HF 2.3.2):
+--   placeable_furniture.start_placing_item, create_object, in_placing_state
+--   hf_bbox.bbox_collider (class), inherits SetWorldOrigin and
+--   CheckForCollisions from aol_bshape.bshape_collider
+--   hf_obj_manager.get_data / update_data (bb_piece)
+--   hf_furniture_types.add_type (bb_core)
+
+local installed = false
+
+-- Physic section currently held by the player, if it is a building piece
+local held_section = nil
+-- Result of the last preview frame: { raw = vector, pos, rot, match }
+local preview = nil
 
 local function log(fmt, ...)
     if bb_debug then bb_debug.log("hf_compat", fmt, ...) end
 end
 
-function apply_preview_transform(section, location, rotation)
-    if not section then return location, rotation end
-    return bb_snap.apply_candidate(section, location, rotation)
+local function is_building_section(section)
+    return section and bb_piece.get_definition(section) ~= nil
+end
+
+local function is_placing_building_piece()
+    return held_section ~= nil and placeable_furniture.in_placing_state()
 end
 
 local function persist_attachment(obj_id, match)
     if not (obj_id and match) then return end
 
-    local target_piece = bb_registry.get_piece(match.target_socket.owner_id)
-    if not target_piece then return end
-
-    bb_registry.unregister_piece(obj_id)
+    local target_piece = match.piece
     bb_piece.set_data(obj_id, {
-        structure_id = target_piece.structure_id,
-        attached_to = target_piece.object_id,
-        attached_socket = match.target_socket.name,
+        structure_id    = target_piece.structure_id,
+        attached_to     = target_piece.object_id,
+        attached_socket = match.socket.name,
     })
     bb_registry.register_piece(obj_id)
 
-    log("Applied snap: obj_id=%s target=%s socket=%s",
-        tostring(obj_id),
-        tostring(target_piece.object_id),
-        match.target_socket.name)
+    log("Placed obj_id=%s attached to obj_id=%s socket=%s structure=%s",
+        tostring(obj_id), tostring(target_piece.object_id),
+        match.socket.name, tostring(target_piece.structure_id))
 end
 
-function install()
-    if original_create_object then return true end
-    if not placeable_furniture or not placeable_furniture.create_object then
-        log("HF create_object is unavailable; creation hook not installed")
-        return false
+local function hook_start_placing()
+    local original = placeable_furniture.start_placing_item
+    placeable_furniture.start_placing_item = function(section)
+        preview = nil
+        held_section = is_building_section(section) and section or nil
+        if held_section then
+            log("Holding building piece %s", held_section)
+        end
+        return original(section)
+    end
+end
+
+local function hook_preview()
+    local cls = hf_bbox.bbox_collider
+    local base_set_origin = aol_bshape.bshape_collider.SetWorldOrigin
+    local base_check = aol_bshape.bshape_collider.CheckForCollisions
+
+    function cls:SetWorldOrigin(new_pos)
+        if is_placing_building_piece() then
+            local pos, rot, match = bb_snap.apply_candidate(held_section, new_pos, self.rotation)
+            preview = { raw = vector():set(new_pos), pos = pos, rot = rot, match = match }
+            if match then
+                self.rotation = rot
+                new_pos = pos
+            end
+        end
+        return base_set_origin(self, new_pos)
     end
 
-    original_create_object = placeable_furniture.create_object
+    function cls:CheckForCollisions()
+        if bb_snap.IGNORE_COLLISION_WHEN_SNAPPED
+            and is_placing_building_piece()
+            and preview and preview.match then
+            self.is_colliding = false
+            return false
+        end
+        return base_check(self)
+    end
+end
 
-    function placeable_furniture.create_object(section, location, rotation, lvid, gvid)
-        local snapped_location, snapped_rotation, match = apply_preview_transform(section, location, rotation)
-        local obj_id = original_create_object(section, snapped_location, snapped_rotation, lvid, gvid)
+local function hook_create_object()
+    local original = placeable_furniture.create_object
+    placeable_furniture.create_object = function(section, location, rotation, lvid, gvid)
+        local match = nil
+
+        -- Only the player's own placement is snapped; HF also calls
+        -- create_object for map-spawned furniture.
+        if section and section == held_section and placeable_furniture.in_placing_state() and location then
+            if preview and preview.raw:distance_to(location) < 0.001 then
+                -- HF passes its unsnapped place_coordinates; reuse what the
+                -- player saw in the preview
+                if preview.match then
+                    location, rotation, match = preview.pos, preview.rot, preview.match
+                end
+            else
+                -- Preview hook did not run (e.g. HF changed); snap now
+                location, rotation, match = bb_snap.apply_candidate(section, location, rotation)
+            end
+        end
+
+        local obj_id = original(section, location, rotation, lvid, gvid)
         persist_attachment(obj_id, match)
         return obj_id
     end
+end
 
-    log("Installed HF creation snap hook")
+function install()
+    if installed then return true end
+    if not (placeable_furniture and placeable_furniture.create_object and placeable_furniture.start_placing_item) then
+        log("HF placeable_furniture API not found; snapping disabled")
+        return false
+    end
+
+    hook_start_placing()
+    hook_create_object()
+
+    if hf_bbox and hf_bbox.bbox_collider and aol_bshape and aol_bshape.bshape_collider then
+        hook_preview()
+        log("Installed HF preview, collision and creation hooks")
+    else
+        log("HF bbox classes not found; snapping only applied on placement")
+    end
+
+    installed = true
     return true
 end
