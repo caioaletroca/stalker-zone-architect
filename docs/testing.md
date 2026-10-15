@@ -25,7 +25,7 @@ To place an item, use it from the inventory (HF's *Place* action). Use (F) confi
 ## Test 1: game loads and pieces render
 
 - [ ] The game reaches the main menu and loads a save without crashing.
-- [ ] Log contains `base_building[core]: bb_core starting (v0.2.1)` and `Installed HF preview, collision and creation hooks`.
+- [ ] Log contains `base_building[core]: bb_core starting (v0.2.2)` and `Installed HF preview, collision and creation hooks`.
 - [ ] Place one foundation. It shows as a flat **green** slab. You can walk on it without falling through, and it doesn't slide or fall over.
 
 If it crashes, send me the end of the log (the part after `FATAL ERROR` / `stack trace`).
@@ -65,5 +65,7 @@ If it crashes, send me the end of the log (the part after `FATAL ERROR` / `stack
 ## Things to note while recording
 
 - If a piece looks rotated 90° or sits on the wrong side, note which piece, which socket name the log printed, and roughly how the first foundation was rotated.
-- Snapped pieces skip HF's collision check on purpose: the structure decides where they go. To get the normal check back, set `IGNORE_COLLISION_WHEN_SNAPPED = false` in `bb_snap.script`.
+- Building pieces always stand level (only their heading follows the camera), even in HF's surface-align mode. On a slope a foundation cuts into the ground on the uphill side. That's intended: structures don't tilt with terrain.
+- Building pieces skip HF's collision check on purpose, so level slabs can cut into slopes and snapped pieces can touch their neighbours. To get the normal check back, set `IGNORE_COLLISION = false` in `bb_snap.script`.
+- Every `Registered obj_id=...` log line prints the saved transform (`pos`, `angle_deg`) and the live server transform (`live`, `live_angle_deg`). The first and third angle values should be 0, and saved and live values should match.
 - Snap range is 1.5 m around the aimed socket (`SNAP_RADIUS` in `bb_snap.script`).

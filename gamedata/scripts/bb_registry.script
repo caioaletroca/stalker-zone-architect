@@ -52,7 +52,12 @@ function register_piece(obj_id)
     pieces_by_id[obj_id] = piece
     structure_ids[piece.structure_id] = structure_ids[piece.structure_id] or {}
     structure_ids[piece.structure_id][obj_id] = piece
-    log("Registered obj_id=%s section=%s structure=%s", tostring(obj_id), piece.section, piece.structure_id)
+    log("Registered obj_id=%s section=%s structure=%s pos=(%.3f, %.3f, %.3f) angle_deg=(%.2f, %.2f, %.2f) live=(%.3f, %.3f, %.3f) live_angle_deg=(%.2f, %.2f, %.2f)",
+        tostring(obj_id), piece.section, piece.structure_id,
+        piece.position.x, piece.position.y, piece.position.z,
+        math.deg(piece.angle.x), math.deg(piece.angle.y), math.deg(piece.angle.z),
+        se_obj.position.x, se_obj.position.y, se_obj.position.z,
+        math.deg(se_obj.angle.x), math.deg(se_obj.angle.y), math.deg(se_obj.angle.z))
     return piece
 end
 

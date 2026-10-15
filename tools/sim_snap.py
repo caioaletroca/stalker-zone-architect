@@ -147,6 +147,36 @@ def run(angle):
     return ok
 
 
+def upright(q):
+    """Port of bb_piece.upright_rotation: keep only the heading of q."""
+    fwd = q.rotate(V(0, 0, 1))
+    fwd.y = 0
+    n = fwd.len()
+    if n < 1e-4:
+        return Q()
+    fwd = fwd * (1 / n)
+    h = math.atan2(fwd.x, fwd.z)
+    q_up = rotation_around(UP, h)
+    if q_up.rotate(V(0, 0, 1)).dot(fwd) < 0.999:
+        q_up = rotation_around(UP, -h)
+    return q_up
+
+
+def run_upright(angle):
+    print("\nupright from tilted angle", angle)
+    q = Q.from_euler(angle)
+    u = upright(q)
+    fwd = q.rotate(V(0, 0, 1))
+    fwd.y = 0
+    fwd = fwd * (1 / fwd.len())
+    ok = check("upright keeps heading", (u.rotate(V(0, 0, 1)) - fwd).len() < 1e-6)
+    ok &= check("upright is level", (u.rotate(UP) - UP).len() < 1e-6)
+    e = u.to_euler()
+    ok &= check("upright euler is yaw-only", abs(e.x) < 1e-6 and abs(e.z) < 1e-6)
+    return ok
+
+
 if __name__ == "__main__":
     results = [run(a) for a in (V(0, 0, 0), V(0, math.radians(30), 0), V(0.1, 0.7, -0.05), V(0, math.pi, 0))]
+    results += [run_upright(a) for a in (V(0.08, 0.7, -0.05), V(-0.1, -2.5, 0.12), V(0.05, math.pi, 0.0), V(0, 0, 0))]
     print("\nALL PASS" if all(results) else "\nSOME FAILED")

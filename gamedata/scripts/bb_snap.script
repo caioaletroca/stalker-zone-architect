@@ -8,9 +8,10 @@ SNAP_RADIUS = 1.5
 SEARCH_RADIUS = 8.0
 -- A slot counts as taken when a piece of the same snap class sits this close
 OCCUPIED_EPSILON = 0.15
--- Snapped pieces skip HF's ray collision test: the structure decides where
--- they go, and neighbours/terrain would otherwise block most snaps
-IGNORE_COLLISION_WHEN_SNAPPED = true
+-- Building pieces skip HF's ray collision test: snapped pieces go where the
+-- structure says, and level foundations are meant to cut into slopes, so
+-- neighbours/terrain would otherwise block most placements
+IGNORE_COLLISION = true
 
 function get_snap_radius()
     return SNAP_RADIUS
@@ -126,6 +127,10 @@ function apply_candidate(section, candidate_pos, candidate_rotation)
         end
     end
 
-    if not match then return candidate_pos, candidate_rotation, nil end
+    if not match then
+        -- Free placement (first foundation): keep HF's position and heading
+        -- but stand the piece level
+        return candidate_pos, bb_piece.upright_rotation(candidate_rotation), nil
+    end
     return vector():set(match.slot.world_pos), match.slot.rotation, match
 end

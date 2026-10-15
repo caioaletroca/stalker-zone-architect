@@ -76,6 +76,32 @@ function set_data(obj_id, bb_data)
     log("Saved bb data for obj_id=%s structure=%s", tostring(obj_id), tostring(bb_data.structure_id))
 end
 
+local UP = vector():set(0, 1, 0)
+local FORWARD = vector():set(0, 0, 1)
+
+---Keeps only the heading of a rotation, so the piece stands level.
+---Structures never tilt with terrain: a yaw-only rotation saves as euler
+---(0, h, 0), which the engine and aol_rotation interpret identically,
+---while pitch/bank round trips are not guaranteed to match the engine.
+---Ported and checked in tools/sim_snap.py (upright).
+---@param q aol_rotation.Quaternion|nil
+---@return aol_rotation.Quaternion
+function upright_rotation(q)
+    if not q then return aol_rotation.Quaternion() end
+
+    local fwd = q:rotate_vector(FORWARD)
+    fwd.y = 0
+    if fwd:magnitude() < 0.0001 then return aol_rotation.Quaternion() end
+    fwd:normalize()
+
+    local heading = math.atan2(fwd.x, fwd.z)
+    local q_up = aol_rotation.get_rotation_around(UP, heading)
+    if q_up:rotate_vector(FORWARD):dotproduct(fwd) < 0.999 then
+        q_up = aol_rotation.get_rotation_around(UP, -heading)
+    end
+    return q_up
+end
+
 ---Adds the placement transform to a bb data table as plain numbers
 ---(HF storage serialises primitives reliably, vectors not necessarily).
 ---@param bb_data table
@@ -129,7 +155,8 @@ function build(obj_id)
         size           = definition.size,
         position       = position,
         angle          = angle,
-        rotation       = aol_rotation.Quaternion(angle),
+        -- Level even for pieces saved tilted by older versions
+        rotation       = upright_rotation(aol_rotation.Quaternion(angle)),
         level_id       = get_level_id(obj),
         structure_id   = bb_data.structure_id,
         attached_to    = bb_data.attached_to,
