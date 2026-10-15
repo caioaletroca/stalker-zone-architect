@@ -25,7 +25,7 @@ To place an item, use it from the inventory (HF's *Place* action). Use (F) confi
 ## Test 1: game loads and pieces render
 
 - [ ] The game reaches the main menu and loads a save without crashing.
-- [ ] Log contains `base_building[core]: bb_core starting (v0.2.0)` and `Installed HF preview, collision and creation hooks`.
+- [ ] Log contains `base_building[core]: bb_core starting (v0.2.1)` and `Installed HF preview, collision and creation hooks`.
 - [ ] Place one foundation. It shows as a flat **green** slab. You can walk on it without falling through, and it doesn't slide or fall over.
 
 If it crashes, send me the end of the log (the part after `FATAL ERROR` / `stack trace`).

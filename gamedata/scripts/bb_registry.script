@@ -25,15 +25,26 @@ end
 ---@param obj_id number
 ---@return table|nil
 function register_piece(obj_id)
+    local se_obj = alife_object(obj_id)
+    if not (se_obj and bb_piece.get_definition(se_obj:section_name())) then return nil end
+
+    -- Fill in missing persistent fields. Right after HF creates the object its
+    -- server transform is exactly the (snapped) placement transform, so that
+    -- is what gets saved; physics can't nudge it afterwards.
+    local bb_data = bb_piece.get_data(obj_id) or {}
+    local dirty = false
+    if not bb_data.structure_id then
+        bb_data.structure_id = make_structure_id(obj_id)
+        dirty = true
+    end
+    if not bb_data.px then
+        bb_piece.with_transform(bb_data, se_obj.position, se_obj.angle)
+        dirty = true
+    end
+    if dirty then bb_piece.set_data(obj_id, bb_data) end
+
     local piece = bb_piece.build(obj_id)
     if not piece then return nil end
-
-    if not piece.structure_id then
-        local bb_data = bb_piece.get_data(obj_id) or {}
-        bb_data.structure_id = make_structure_id(obj_id)
-        bb_piece.set_data(obj_id, bb_data)
-        piece.structure_id = bb_data.structure_id
-    end
 
     local previous = pieces_by_id[obj_id]
     if previous then remove_from_structure(previous) end

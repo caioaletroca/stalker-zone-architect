@@ -13,6 +13,7 @@ Modular, snapping base building (foundations, walls, doorways, flat roofs) for S
 | `assets/blender/bb_greybox.blend` | Blender source scene (generated) |
 | `tools/blender/build_greybox.py` | Builds the .blend and exports the OGFs |
 | `tools/make_dds.py` | Writes the solid-colour DDS textures |
+| `tools/gen_piece_configs.py` | Generates the piece .ltx sections and string table |
 | `tools/sim_snap.py` | Offline check of the snap/rotation maths |
 | `tools/ogf_info.py` | Dumps OGF chunk headers |
 | `references/` | Original HF / EMHF mods (git-ignored, reading only) |

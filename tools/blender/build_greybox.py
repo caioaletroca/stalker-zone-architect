@@ -75,6 +75,9 @@ PIECES = {
 }
 
 MASS = 1000.0
+# Physics boxes are shrunk by this much per side so touching neighbours
+# never overlap (overlapping bodies get pushed apart by the physics engine)
+PHYSICS_INSET = 0.005
 GAMEMTL = "default_object"
 
 
@@ -159,7 +162,7 @@ def build_piece(piece_name, spec, collection):
         x.ikjoint.type = "0"        # rigid
         x.mass.value = MASS / len(spec["parts"])
         center = [(a + b) / 2 for a, b in zip(vmin, vmax)]
-        half = [(b - a) / 2 for a, b in zip(vmin, vmax)]
+        half = [(b - a) / 2 - PHYSICS_INSET for a, b in zip(vmin, vmax)]
         shape_matrix = mathutils.Matrix.Translation(center) @ mathutils.Matrix.Diagonal(half + [1.0])
         bone_shape.apply_shape(bone, shape_matrix)
     bpy.ops.object.mode_set(mode="OBJECT")

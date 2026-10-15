@@ -43,6 +43,10 @@ base_rotation                           = 0
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_foundation
 
+; Anchor the root bone to the world so the physics engine never moves a
+; placed piece (touching neighbours would otherwise push each other apart)
+fixed_bones                             = link
+
 bounding_box_size                       = 2.44, 2.44, 0.16
 bounding_box_origin                     = 0.0, 0.1, 0.0
 
@@ -83,6 +87,10 @@ base_rotation                           = 0
 
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_wall
+
+; Anchor the root bone to the world so the physics engine never moves a
+; placed piece (touching neighbours would otherwise push each other apart)
+fixed_bones                             = link
 
 bounding_box_size                       = 2.44, 0.16, 2.94
 bounding_box_origin                     = 0.0, 1.5, 0.0
@@ -125,6 +133,10 @@ base_rotation                           = 0
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_wall_doorway
 
+; Anchor the root bone to the world so the physics engine never moves a
+; placed piece (touching neighbours would otherwise push each other apart)
+fixed_bones                             = link
+
 bounding_box_size                       = 2.44, 0.16, 2.94
 bounding_box_origin                     = 0.0, 1.5, 0.0
 
@@ -165,6 +177,10 @@ base_rotation                           = 0
 
 script_binding                          = bind_hf_base.init
 item_section                            = bb_item_roof_flat
+
+; Anchor the root bone to the world so the physics engine never moves a
+; placed piece (touching neighbours would otherwise push each other apart)
+fixed_bones                             = link
 
 bounding_box_size                       = 2.44, 2.44, 0.16
 bounding_box_origin                     = 0.0, 0.1, 0.0

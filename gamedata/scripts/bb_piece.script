@@ -76,6 +76,18 @@ function set_data(obj_id, bb_data)
     log("Saved bb data for obj_id=%s structure=%s", tostring(obj_id), tostring(bb_data.structure_id))
 end
 
+---Adds the placement transform to a bb data table as plain numbers
+---(HF storage serialises primitives reliably, vectors not necessarily).
+---@param bb_data table
+---@param position vector
+---@param angle vector euler angles as stored on the server object
+---@return table bb_data
+function with_transform(bb_data, position, angle)
+    bb_data.px, bb_data.py, bb_data.pz = position.x, position.y, position.z
+    bb_data.ax, bb_data.ay, bb_data.az = angle.x, angle.y, angle.z
+    return bb_data
+end
+
 ---Level id of a server object, used to keep structures on different maps apart.
 ---@param se_obj cse_alife_object
 ---@return number|nil
@@ -96,7 +108,17 @@ function build(obj_id)
     if not definition then return nil end
 
     local bb_data = get_data(obj_id) or {}
-    local angle = vector():set(obj.angle)
+
+    -- Prefer the transform saved at placement time: it is exactly on the
+    -- structure grid, while the live object may have been nudged by physics
+    local position, angle
+    if bb_data.px then
+        position = vector():set(bb_data.px, bb_data.py, bb_data.pz)
+        angle = vector():set(bb_data.ax, bb_data.ay, bb_data.az)
+    else
+        position = vector():set(obj.position)
+        angle = vector():set(obj.angle)
+    end
 
     return {
         object_id      = obj_id,
@@ -105,7 +127,7 @@ function build(obj_id)
         snap_class     = definition.snap_class,
         socket_profile = definition.socket_profile,
         size           = definition.size,
-        position       = vector():set(obj.position),
+        position       = position,
         angle          = angle,
         rotation       = aol_rotation.Quaternion(angle),
         level_id       = get_level_id(obj),
