@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+
+	<string id="st_bb_foundation">
+		<text>Foundation (Prototype)</text>
+	</string>
+	<string id="st_bb_foundation_descr">
+		<text>Greybox structural foundation. 5x5m building module.</text>
+	</string>
+
+	<string id="st_bb_wall">
+		<text>Wall (Prototype)</text>
+	</string>
+	<string id="st_bb_wall_descr">
+		<text>Greybox structural wall. 5x3m building module.</text>
+	</string>
+
+	<string id="st_bb_roof_flat">
+		<text>Flat Roof (Prototype)</text>
+	</string>
+	<string id="st_bb_roof_flat_descr">
+		<text>Greybox flat roof panel. 5x5m building module.</text>
+	</string>
+
+</string_table>

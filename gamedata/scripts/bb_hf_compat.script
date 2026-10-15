@@ -1,0 +1,50 @@
+local original_create_object = nil
+
+local function log(fmt, ...)
+    if bb_debug then bb_debug.log("hf_compat", fmt, ...) end
+end
+
+function apply_preview_transform(section, location, rotation)
+    if not section then return location, rotation end
+    return bb_snap.apply_candidate(section, location, rotation)
+end
+
+local function persist_attachment(obj_id, match)
+    if not (obj_id and match) then return end
+
+    local target_piece = bb_registry.get_piece(match.target_socket.owner_id)
+    if not target_piece then return end
+
+    bb_registry.unregister_piece(obj_id)
+    bb_piece.set_data(obj_id, {
+        structure_id = target_piece.structure_id,
+        attached_to = target_piece.object_id,
+        attached_socket = match.target_socket.name,
+    })
+    bb_registry.register_piece(obj_id)
+
+    log("Applied snap: obj_id=%s target=%s socket=%s",
+        tostring(obj_id),
+        tostring(target_piece.object_id),
+        match.target_socket.name)
+end
+
+function install()
+    if original_create_object then return true end
+    if not placeable_furniture or not placeable_furniture.create_object then
+        log("HF create_object is unavailable; creation hook not installed")
+        return false
+    end
+
+    original_create_object = placeable_furniture.create_object
+
+    function placeable_furniture.create_object(section, location, rotation, lvid, gvid)
+        local snapped_location, snapped_rotation, match = apply_preview_transform(section, location, rotation)
+        local obj_id = original_create_object(section, snapped_location, snapped_rotation, lvid, gvid)
+        persist_attachment(obj_id, match)
+        return obj_id
+    end
+
+    log("Installed HF creation snap hook")
+    return true
+end

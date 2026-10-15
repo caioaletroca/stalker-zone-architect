@@ -1,0 +1,85 @@
+local pieces_by_id = {}
+local structure_ids = {}
+
+local function log(fmt, ...)
+    if bb_debug then bb_debug.log("registry", fmt, ...) end
+end
+
+local function make_structure_id(obj_id)
+    return "bb_" .. tostring(obj_id)
+end
+
+---@param obj_id number
+---@return table|nil
+function register_piece(obj_id)
+    local piece = bb_piece.build(obj_id)
+    if not piece then return nil end
+
+    local bb_data = bb_piece.get_data(obj_id) or {}
+    if not bb_data.structure_id then
+        bb_data.structure_id = make_structure_id(obj_id)
+        bb_piece.set_data(obj_id, bb_data)
+        piece.structure_id = bb_data.structure_id
+    end
+
+    pieces_by_id[obj_id] = piece
+    structure_ids[piece.structure_id] = structure_ids[piece.structure_id] or {}
+    structure_ids[piece.structure_id][obj_id] = piece
+    log("Registered obj_id=%s section=%s structure=%s", tostring(obj_id), piece.section, piece.structure_id)
+    return piece
+end
+
+---@param obj_id number
+function unregister_piece(obj_id)
+    local piece = pieces_by_id[obj_id]
+    if not piece then return end
+
+    local structure = structure_ids[piece.structure_id]
+    if structure then
+        structure[obj_id] = nil
+        if not next(structure) then
+            structure_ids[piece.structure_id] = nil
+        end
+    end
+
+    pieces_by_id[obj_id] = nil
+    log("Unregistered obj_id=%s", tostring(obj_id))
+end
+
+---@param obj_id number
+---@return table|nil
+function get_piece(obj_id)
+    return pieces_by_id[obj_id]
+end
+
+---@return table
+function get_all_pieces()
+    return pieces_by_id
+end
+
+---@param structure_id string
+---@return table|nil
+function get_structure_pieces(structure_id)
+    return structure_ids[structure_id]
+end
+
+---@return number
+function count()
+    local total = 0
+    for _ in pairs(pieces_by_id) do total = total + 1 end
+    return total
+end
+
+function rebuild()
+    pieces_by_id = {}
+    structure_ids = {}
+
+    alife():iterate_objects(function(se_obj)
+        local placeable_type = hf_furniture_types.get_type(se_obj)
+        if placeable_type == "building_piece" or placeable_type == "bb_piece" then
+            register_piece(se_obj.id)
+        end
+    end)
+
+    log("Rebuilt registry, pieces=%s", tostring(count()))
+end

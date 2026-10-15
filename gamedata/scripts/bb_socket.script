@@ -1,0 +1,105 @@
+local function log(fmt, ...)
+    if bb_debug then bb_debug.log("socket", fmt, ...) end
+end
+
+-- Declarative socket templates per profile.
+--
+-- Offsets are in X-Ray local metres relative to the object origin.
+-- X-Ray is Y-up: x = right, y = up, z = forward.
+--
+-- Prototype greybox modules (authored in assets/blender/bb_prototype_pieces.blend):
+--   foundation / roof : 2.5 x 2.5 x 0.2 m, origin at base centre
+--   wall              : 2.5 wide x 2.5 tall x 0.2 thick, origin at base centre
+--
+-- Because the origin sits at the base of each mesh, vertical sockets are
+-- measured from y=0 (bottom) upwards, NOT from a centre point.
+local CELL = 2.5
+local HALF = CELL / 2.0     -- 1.25
+local WALL_H = 2.5
+local SLAB_T = 0.2
+
+local SOCKET_DEFINITIONS = {
+    wall_standard = {
+        {
+            name = "top",
+            type = "wall_top",
+            local_pos = vector():set(0, WALL_H, 0),
+            accepts = { wall_bottom = true, roof_edge = true },
+        },
+        {
+            name = "bottom",
+            type = "wall_bottom",
+            local_pos = vector():set(0, 0, 0),
+            accepts = { foundation_edge = true, floor_edge = true, wall_top = true },
+        },
+        {
+            name = "left",
+            type = "wall_left",
+            local_pos = vector():set(-HALF, WALL_H / 2.0, 0),
+            accepts = { wall_right = true },
+        },
+        {
+            name = "right",
+            type = "wall_right",
+            local_pos = vector():set(HALF, WALL_H / 2.0, 0),
+            accepts = { wall_left = true },
+        },
+    },
+    foundation_standard = {
+        { name = "north", type = "foundation_edge", local_pos = vector():set(0, SLAB_T, HALF),  accepts = { foundation_edge = true, wall_bottom = true } },
+        { name = "south", type = "foundation_edge", local_pos = vector():set(0, SLAB_T, -HALF), accepts = { foundation_edge = true, wall_bottom = true } },
+        { name = "east",  type = "foundation_edge", local_pos = vector():set(HALF, SLAB_T, 0),  accepts = { foundation_edge = true, wall_bottom = true } },
+        { name = "west",  type = "foundation_edge", local_pos = vector():set(-HALF, SLAB_T, 0), accepts = { foundation_edge = true, wall_bottom = true } },
+    },
+    roof_flat_standard = {
+        { name = "bottom", type = "roof_edge",  local_pos = vector():set(0, 0, 0),           accepts = { wall_top = true } },
+        { name = "north",  type = "floor_edge", local_pos = vector():set(0, SLAB_T, HALF),   accepts = { floor_edge = true, wall_bottom = true } },
+        { name = "south",  type = "floor_edge", local_pos = vector():set(0, SLAB_T, -HALF),  accepts = { floor_edge = true, wall_bottom = true } },
+        { name = "east",   type = "floor_edge", local_pos = vector():set(HALF, SLAB_T, 0),   accepts = { floor_edge = true, wall_bottom = true } },
+        { name = "west",   type = "floor_edge", local_pos = vector():set(-HALF, SLAB_T, 0),  accepts = { floor_edge = true, wall_bottom = true } },
+    },
+}
+
+---Gets socket templates for a profile.
+---@param profile_name string
+---@return table|nil
+function get_profile(profile_name)
+    return SOCKET_DEFINITIONS[profile_name]
+end
+
+---Generates world sockets for a runtime piece.
+---@param piece table
+---@return table sockets
+function generate_world_sockets(piece)
+    local sockets = {}
+    local profile = get_profile(piece.socket_profile)
+    if not profile then return sockets end
+
+    local q_rot = piece.rotation or aol_rotation.Quaternion(piece.angle)
+
+    for i, tmpl in ipairs(profile) do
+        local world_offset = q_rot:rotate_vector(tmpl.local_pos)
+        local world_pos = vector():set(piece.position):add(world_offset)
+
+        table.insert(sockets, {
+            owner_id   = piece.object_id,
+            name       = tmpl.name,
+            type       = tmpl.type,
+            accepts    = tmpl.accepts,
+            world_pos  = world_pos,
+            local_pos  = vector():set(tmpl.local_pos),
+            orientation = piece.angle,
+        })
+    end
+
+    return sockets
+end
+
+---Checks whether socket_a accepts socket_b type.
+---@param socket_a table
+---@param socket_b table
+---@return boolean
+function is_compatible(socket_a, socket_b)
+    if not (socket_a and socket_b) then return false end
+    return socket_a.accepts[socket_b.type] == true
+end

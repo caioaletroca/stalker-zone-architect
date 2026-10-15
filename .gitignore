@@ -1,0 +1,15 @@
+# Third-party mods kept locally for reference only (not redistributable)
+references/
+
+# Blender autosave/backup
+*.blend1
+*.blend2
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.vscode/

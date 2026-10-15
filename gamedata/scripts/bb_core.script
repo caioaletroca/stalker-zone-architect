@@ -1,0 +1,51 @@
+local version = "0.1.0"
+
+local function log(fmt, ...)
+    if bb_debug then
+        bb_debug.log("core", fmt, ...)
+    else
+        printf("bb_core: " .. fmt, ...)
+    end
+end
+
+function get_version()
+    return version
+end
+
+function init_building_piece(obj_id)
+    log("Initializing building piece obj_id=%s", tostring(obj_id))
+    bb_registry.register_piece(obj_id)
+end
+
+function on_furniture_place(obj_id)
+    log("hf_on_furniture_place fired for obj_id=%s", tostring(obj_id))
+    local obj = alife_object(obj_id)
+    if not obj then return end
+
+    local placeable_type = hf_furniture_types.get_type(obj)
+    if placeable_type == "building_piece" or placeable_type == "bb_piece" then
+        bb_registry.register_piece(obj_id)
+    end
+end
+
+function on_before_furniture_release(obj_id)
+    log("hf_on_before_furniture_release fired for obj_id=%s", tostring(obj_id))
+    bb_registry.unregister_piece(obj_id)
+end
+
+function on_game_start()
+    log("bb_core starting (v%s)", version)
+    
+    if hf_furniture_types then
+        hf_furniture_types.add_type("building_piece", init_building_piece, true)
+        hf_furniture_types.add_type("bb_piece", init_building_piece, true)
+        log("Registered building_piece and bb_piece types with HF")
+    end
+
+    RegisterScriptCallback("hf_on_furniture_place", on_furniture_place)
+    RegisterScriptCallback("hf_on_before_furniture_release", on_before_furniture_release)
+
+    if bb_hf_compat then
+        bb_hf_compat.install()
+    end
+end
