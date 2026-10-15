@@ -40,3 +40,7 @@ python tools/make_dds.py
 ```
 
 Each piece is exported as a rigid skeleton (one armature with a box-shaped collision bone per part), because HF spawns placeables as `physic_object`. Artists replacing a greybox should keep the same origin (bottom centre), the same dimensions, and an armature with collision shapes.
+
+## License
+
+[MIT](LICENSE). This covers the code and assets in this repository only. Hideout Furniture, Even More Hideout Furniture and S.T.A.L.K.E.R. Anomaly / GAMMA are separate works by their own authors and are not included here; this mod requires them to be installed.
