@@ -2,6 +2,8 @@
 
 Modular, snapping base building (foundations, walls, doorways, flat roofs) for S.T.A.L.K.E.R. Anomaly / GAMMA, built as an add-on to **Hideout Furniture** (HF 2.3.2). The design and roadmap are in [docs/handoff.md](docs/handoff.md). To test it in game, follow [docs/testing.md](docs/testing.md).
 
+**3D artists:** want to help make real building sets? Start with the [asset guide](docs/asset-spec.md).
+
 ## Layout
 
 | Path | What |
@@ -41,7 +43,7 @@ You need Blender 5.x with the [blender-xray](https://github.com/PavelBlend/blend
 python tools/make_dds.py
 ```
 
-Each piece is exported as a rigid skeleton (one armature with a box-shaped collision bone per part), because HF spawns placeables as `physic_object`. Artists replacing a greybox should keep the same origin (bottom centre), the same dimensions, and an armature with collision shapes.
+Each piece is exported as a rigid skeleton (one armature with a box-shaped collision bone per part), because HF spawns placeables as `physic_object`. Artists replacing a greybox should follow [docs/asset-spec.md](docs/asset-spec.md).
 
 ## Crafting
 
